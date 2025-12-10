@@ -1351,7 +1351,23 @@ Write-Host ""
 
 # Installed Hotfixes (last 10)
 Write-Host "[+] Installed Updates (last 10)..." -ForegroundColor Yellow
-wmic qfe get Caption,Description,HotFixID,InstalledOn 2>$null | Select-Object -First 12
+$wmicPath = "$env:SystemRoot\System32\wbem\wmic.exe"
+if (Test-Path $wmicPath) {
+    & $wmicPath qfe get Caption,Description,HotFixID,InstalledOn 2>$null | Select-Object -First 12
+} else {
+    # Fallback for systems without wmic (Windows 11+)
+    $hotfixes = Get-HotFix -ErrorAction SilentlyContinue |
+        Sort-Object InstalledOn -Descending -ErrorAction SilentlyContinue |
+        Select-Object -First 10
+    if ($hotfixes) {
+        $hotfixes | ForEach-Object {
+            $installed = if ($_.InstalledOn) { $_.InstalledOn.ToString("MM/dd/yyyy") } else { "Unknown" }
+            Write-Host "  $($_.HotFixID) - $($_.Description) - $installed" -ForegroundColor White
+        }
+    } else {
+        Write-Host "  Unable to retrieve hotfix information" -ForegroundColor Gray
+    }
+}
 Write-Host ""
 
 # Vulnerable Drivers (common targets)
