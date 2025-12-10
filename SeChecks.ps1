@@ -1061,6 +1061,65 @@ function Get-SMBSigningStatus {
     }
 }
 
+function Get-IPv6Status {
+    $replicationCmd = "# PowerShell:`nGet-NetAdapterBinding -ComponentID ms_tcpip6 | Select-Object Name, Enabled`n# Registry:`nreg query HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters /v DisabledComponents"
+
+    try {
+        # Check registry for IPv6 disabled components
+        $ipv6Disabled = $false
+        try {
+            $disabledComponents = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters' -Name 'DisabledComponents' -ErrorAction SilentlyContinue).DisabledComponents
+            # 0xFF (255) = IPv6 disabled on all interfaces
+            # 0x20 (32) = Prefer IPv4 over IPv6
+            # 0x00 or not set = IPv6 enabled (default)
+            if ($disabledComponents -eq 0xFF) {
+                $ipv6Disabled = $true
+            }
+        } catch {
+            # Key doesn't exist, IPv6 is enabled by default
+        }
+
+        # Check adapter bindings
+        $adaptersWithIPv6 = Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction Stop | Where-Object { $_.Enabled -eq $true }
+        $adaptersWithoutIPv6 = Get-NetAdapterBinding -ComponentID ms_tcpip6 -ErrorAction Stop | Where-Object { $_.Enabled -eq $false }
+
+        if ($ipv6Disabled) {
+            return [PSCustomObject]@{
+                CheckName      = 'IPv6 Configuration'
+                Status         = 'Good'
+                Message        = 'IPv6 is disabled system-wide via registry.'
+                ReplicationCmd = $null
+            }
+        }
+
+        if ($adaptersWithIPv6.Count -eq 0) {
+            return [PSCustomObject]@{
+                CheckName      = 'IPv6 Configuration'
+                Status         = 'Good'
+                Message        = 'IPv6 is disabled on all network adapters.'
+                ReplicationCmd = $null
+            }
+        }
+
+        # IPv6 is enabled - check if it appears configured
+        $enabledAdapters = ($adaptersWithIPv6 | ForEach-Object { $_.Name }) -join ', '
+
+        return [PSCustomObject]@{
+            CheckName      = 'IPv6 Configuration'
+            Status         = 'Bad'
+            Message        = "IPv6 is enabled on: $enabledAdapters. If not required, disable to reduce attack surface."
+            ReplicationCmd = $replicationCmd
+        }
+    } catch {
+        return [PSCustomObject]@{
+            CheckName      = 'IPv6 Configuration'
+            Status         = 'Error'
+            Message        = "Could not retrieve IPv6 status. Error: $($_.Exception.Message)"
+            ReplicationCmd = $null
+        }
+    }
+}
+
 
 # ============================================================================
 # MAIN SCRIPT
@@ -1106,6 +1165,7 @@ $results += Get-EnhancedRDPStatus
 $results += Get-SMBv1Status
 $results += Get-SMBSigningStatus
 $results += Get-NetworkSharingStatus
+$results += Get-IPv6Status
 
 # System Configuration
 $results += Get-ExecutionPolicyStatus
