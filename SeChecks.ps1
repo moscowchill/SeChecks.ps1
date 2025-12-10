@@ -1332,6 +1332,76 @@ try {
 }
 Write-Host ""
 
+# --- SECTION 2.5: SOFTWARE & DRIVER ENUMERATION (LPE) ---
+
+Write-Host "===================================" -ForegroundColor Cyan
+Write-Host "Software & Drivers (LPE Recon)" -ForegroundColor Cyan
+Write-Host "===================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Windows Version
+Write-Host "[+] Windows Version..." -ForegroundColor Yellow
+$osInfo = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -ErrorAction SilentlyContinue
+if ($osInfo) {
+    $build = "$($osInfo.CurrentMajorVersionNumber).$($osInfo.CurrentMinorVersionNumber).$($osInfo.CurrentBuildNumber).$($osInfo.UBR)"
+    Write-Host "  $($osInfo.ProductName) (Build $build)" -ForegroundColor White
+    Write-Host "  Edition: $($osInfo.EditionID)" -ForegroundColor Gray
+}
+Write-Host ""
+
+# Installed Hotfixes (last 10)
+Write-Host "[+] Installed Updates (last 10)..." -ForegroundColor Yellow
+wmic qfe get Caption,Description,HotFixID,InstalledOn 2>$null | Select-Object -First 12
+Write-Host ""
+
+# Vulnerable Drivers (common targets)
+Write-Host "[+] Potentially Vulnerable Drivers..." -ForegroundColor Yellow
+$vulnDrivers = @(
+    "RTCore64.sys", "RTCore32.sys",           # MSI Afterburner
+    "DBUtil_2_3.sys",                          # Dell BIOS
+    "AsIO.sys", "AsIO64.sys",                  # ASUS
+    "WinRing0.sys", "WinRing0x64.sys",        # Various
+    "SANDBOX.sys",                             # Avecto
+    "elbycdio.sys",                            # ElbyCDIO
+    "cpuz141.sys", "cpuz.sys",                 # CPU-Z
+    "gdrv.sys",                                # Gigabyte
+    "aswVmm.sys", "aswArPot.sys",             # Avast
+    "NTIOLib.sys", "NTIOLib_X64.sys",         # MSI
+    "AsUpIO.sys",                              # ASUS
+    "BS_HWMIO64_W10.sys", "BS_I2cIo.sys"      # Biostar
+)
+$foundVuln = $false
+foreach ($drv in $vulnDrivers) {
+    $drvPath = Get-ChildItem -Path "$env:SystemRoot\System32\drivers\$drv" -ErrorAction SilentlyContinue
+    if ($drvPath) {
+        Write-Host "  [!] $drv" -ForegroundColor Red
+        $foundVuln = $true
+    }
+}
+if (-not $foundVuln) {
+    Write-Host "  None of the common vulnerable drivers found" -ForegroundColor Green
+}
+Write-Host ""
+
+# Third-party Software (common LPE targets)
+Write-Host "[+] Installed Software (LPE targets)..." -ForegroundColor Yellow
+$regPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+)
+$software = Get-ItemProperty $regPaths -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -and $_.DisplayName -match '(VMware|VirtualBox|Citrix|TeamViewer|AnyDesk|7-Zip|WinRAR|PuTTY|FileZilla|Foxit|Adobe|Java|Python|Node|Git|VSCode|Notepad\+\+)' } |
+    Select-Object DisplayName, DisplayVersion |
+    Sort-Object DisplayName -Unique
+if ($software) {
+    $software | ForEach-Object {
+        Write-Host "  $($_.DisplayName) - $($_.DisplayVersion)" -ForegroundColor White
+    }
+} else {
+    Write-Host "  No common LPE target software found" -ForegroundColor Gray
+}
+Write-Host ""
+
 # --- SECTION 3: PERMISSIONS SUMMARY ---
 
 Write-Host "========================================" -ForegroundColor Cyan
