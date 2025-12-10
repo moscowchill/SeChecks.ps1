@@ -2,30 +2,24 @@
 # Combines security configuration auditing with persistence mechanism enumeration
 
 # Check for Constrained Language Mode
-if ($ExecutionContext.SessionState.LanguageMode -eq 'ConstrainedLanguage') {
-    Write-Host "ERROR: PowerShell is running in Constrained Language Mode." -ForegroundColor Red
-    Write-Host "This script requires Full Language Mode to run." -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Constrained Language Mode is typically enforced by:" -ForegroundColor Yellow
-    Write-Host "  - AppLocker policies" -ForegroundColor Yellow
-    Write-Host "  - Windows Defender Application Control (WDAC)" -ForegroundColor Yellow
-    Write-Host "  - Device Guard" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Current Language Mode: $($ExecutionContext.SessionState.LanguageMode)" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "To check AppLocker status: Get-AppLockerPolicy -Effective -Xml" -ForegroundColor Gray
-    Write-Host "To bypass (if allowed): powershell -version 2 -ep bypass .\SeChecks.ps1" -ForegroundColor Gray
-    Write-Host ""
-    Read-Host "Press Enter to exit..."
-    exit 1
-}
+$script:ConstrainedMode = $ExecutionContext.SessionState.LanguageMode -eq 'ConstrainedLanguage'
 
-# Admin check - allows non-admin execution with warnings
-$script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($script:ConstrainedMode) {
+    Write-Host "WARNING: PowerShell is running in Constrained Language Mode." -ForegroundColor Yellow
+    Write-Host "Security configuration checks will be skipped (require custom objects)." -ForegroundColor Yellow
+    Write-Host "Persistence enumeration will still run." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "CLM is typically enforced by AppLocker, WDAC, or Device Guard." -ForegroundColor Gray
+    Write-Host ""
+    $script:IsAdmin = $false
+} else {
+    # Admin check - allows non-admin execution with warnings
+    $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-if (-NOT $script:IsAdmin) {
-    Write-Host "WARNING: Running without Administrator privileges. Some checks will be skipped or may return limited information." -ForegroundColor Yellow
-    Write-Host "For complete security assessment, run as Administrator.`n" -ForegroundColor Yellow
+    if (-NOT $script:IsAdmin) {
+        Write-Host "WARNING: Running without Administrator privileges. Some checks will be skipped or may return limited information." -ForegroundColor Yellow
+        Write-Host "For complete security assessment, run as Administrator.`n" -ForegroundColor Yellow
+    }
 }
 
 # --- Function Definitions ---
@@ -1151,70 +1145,76 @@ Write-Host ""
 
 # --- SECTION 1: SECURITY CONFIGURATION AUDIT ---
 
-Write-Host "Running Security Configuration Checks..." -ForegroundColor Cyan
-Write-Host ""
+if ($script:ConstrainedMode) {
+    Write-Host "--- Security Configuration Checks: SKIPPED (Constrained Language Mode) ---" -ForegroundColor Yellow
+    Write-Host ""
+    $results = @()
+} else {
+    Write-Host "Running Security Configuration Checks..." -ForegroundColor Cyan
+    Write-Host ""
 
-$results = @()
+    $results = @()
 
-# Core Windows 11 Security Features
-$results += Get-VBSStatus
-$results += Get-CredentialGuardStatus
-$results += Get-TPMStatus
-$results += Get-SecureBootStatus
+    # Core Windows 11 Security Features
+    $results += Get-VBSStatus
+    $results += Get-CredentialGuardStatus
+    $results += Get-TPMStatus
+    $results += Get-SecureBootStatus
 
-# Windows Defender - Enhanced Checks
-$results += Get-EnhancedDefenderStatus
-$results += Get-ASRStatus
-$results += Get-ControlledFolderAccessStatus
-$results += Get-DefenderExclusionsStatus
+    # Windows Defender - Enhanced Checks
+    $results += Get-EnhancedDefenderStatus
+    $results += Get-ASRStatus
+    $results += Get-ControlledFolderAccessStatus
+    $results += Get-DefenderExclusionsStatus
 
-# Traditional Security Checks
-$results += Get-FirewallStatus
-$results += Get-UACStatus
-$results += Get-WindowsUpdateStatus
-$results += Get-BitLockerStatus
+    # Traditional Security Checks
+    $results += Get-FirewallStatus
+    $results += Get-UACStatus
+    $results += Get-WindowsUpdateStatus
+    $results += Get-BitLockerStatus
 
-# Authentication & Access Control
-$results += Get-WindowsHelloStatus
-$results += Get-GuestAccountStatus
-$results += Get-ModernLAPSStatus
+    # Authentication & Access Control
+    $results += Get-WindowsHelloStatus
+    $results += Get-GuestAccountStatus
+    $results += Get-ModernLAPSStatus
 
-# Network Security
-$results += Get-EnhancedRDPStatus
-$results += Get-SMBv1Status
-$results += Get-SMBSigningStatus
-$results += Get-NetworkSharingStatus
-$results += Get-IPv6Status
+    # Network Security
+    $results += Get-EnhancedRDPStatus
+    $results += Get-SMBv1Status
+    $results += Get-SMBSigningStatus
+    $results += Get-NetworkSharingStatus
+    $results += Get-IPv6Status
 
-# System Configuration
-$results += Get-ExecutionPolicyStatus
-$results += Get-AuditPolicyStatus
+    # System Configuration
+    $results += Get-ExecutionPolicyStatus
+    $results += Get-AuditPolicyStatus
 
-# Display Security Check Results
-Write-Host "--- Security Configuration Results ---" -ForegroundColor Cyan
-Write-Host ""
+    # Display Security Check Results
+    Write-Host "--- Security Configuration Results ---" -ForegroundColor Cyan
+    Write-Host ""
 
-foreach ($result in $results) {
-    $statusColor = switch ($result.Status) {
-        'Good'    { 'Green' }
-        'Bad'     { 'Red' }
-        'Warning' { 'Yellow' }
-        'Error'   { 'Magenta' }
-    }
-    Write-Host "[$($result.Status.ToUpper())]" -ForegroundColor $statusColor -NoNewline
-    Write-Host " $($result.CheckName): $($result.Message)"
-
-    # Display replication command for Bad status
-    if ($result.Status -eq 'Bad' -and $result.ReplicationCmd) {
-        Write-Host "  [Replication Commands]" -ForegroundColor DarkGray
-        $result.ReplicationCmd -split "`n" | ForEach-Object {
-            Write-Host "    $_" -ForegroundColor DarkCyan
+    foreach ($result in $results) {
+        $statusColor = switch ($result.Status) {
+            'Good'    { 'Green' }
+            'Bad'     { 'Red' }
+            'Warning' { 'Yellow' }
+            'Error'   { 'Magenta' }
         }
-        Write-Host ""
-    }
-}
+        Write-Host "[$($result.Status.ToUpper())]" -ForegroundColor $statusColor -NoNewline
+        Write-Host " $($result.CheckName): $($result.Message)"
 
-Write-Host ""
+        # Display replication command for Bad status
+        if ($result.Status -eq 'Bad' -and $result.ReplicationCmd) {
+            Write-Host "  [Replication Commands]" -ForegroundColor DarkGray
+            $result.ReplicationCmd -split "`n" | ForEach-Object {
+                Write-Host "    $_" -ForegroundColor DarkCyan
+            }
+            Write-Host ""
+        }
+    }
+
+    Write-Host ""
+}
 
 # --- SECTION 2: PERSISTENCE ENUMERATION ---
 
@@ -1462,17 +1462,30 @@ Write-Host ""
 # User Context
 Write-Host "[CURRENT USER CONTEXT]" -ForegroundColor Yellow
 Write-Host ""
-$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object System.Security.Principal.WindowsPrincipal($currentUser)
-$isAdmin = $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 
-Write-Host "  Username: " -NoNewline
-Write-Host "$($currentUser.Name)" -ForegroundColor Cyan
-Write-Host "  Admin:    " -NoNewline
-if ($isAdmin) {
-    Write-Host "YES - Running with Administrator privileges" -ForegroundColor Green
+if ($script:ConstrainedMode) {
+    $currentUserName = $env:USERNAME
+    $isAdmin = $false
+    Write-Host "  Username: " -NoNewline
+    Write-Host "$env:USERDOMAIN\$env:USERNAME" -ForegroundColor Cyan
+    Write-Host "  Admin:    " -NoNewline
+    Write-Host "UNKNOWN (Constrained Language Mode)" -ForegroundColor Yellow
+    Write-Host "  Language: " -NoNewline
+    Write-Host "Constrained" -ForegroundColor Red
 } else {
-    Write-Host "NO  - Running with standard user privileges" -ForegroundColor Yellow
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object System.Security.Principal.WindowsPrincipal($currentUser)
+    $isAdmin = $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    $currentUserName = $currentUser.Name
+
+    Write-Host "  Username: " -NoNewline
+    Write-Host "$($currentUser.Name)" -ForegroundColor Cyan
+    Write-Host "  Admin:    " -NoNewline
+    if ($isAdmin) {
+        Write-Host "YES - Running with Administrator privileges" -ForegroundColor Green
+    } else {
+        Write-Host "NO  - Running with standard user privileges" -ForegroundColor Yellow
+    }
 }
 Write-Host ""
 
@@ -1489,12 +1502,13 @@ Security Report - $(Get-Date -Format "yyyy/MM/dd HH:mm")
 
 CURRENT USER CONTEXT
 =======================================
-Username:      $($currentUser.Name)
-Administrator: $(if ($isAdmin) { 'Yes' } else { 'No' })
+Username:      $(if ($script:ConstrainedMode) { "$env:USERDOMAIN\$env:USERNAME" } else { $currentUserName })
+Administrator: $(if ($script:ConstrainedMode) { 'Unknown (CLM)' } elseif ($isAdmin) { 'Yes' } else { 'No' })
+Language Mode: $(if ($script:ConstrainedMode) { 'Constrained' } else { 'Full' })
 
 SECURITY CONFIGURATION AUDIT
 =======================================
-
+$(if ($script:ConstrainedMode) { 'Skipped due to Constrained Language Mode' } else { '' })
 "@
 
 foreach ($result in $results) {
