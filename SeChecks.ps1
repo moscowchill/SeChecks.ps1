@@ -1,6 +1,25 @@
 # Windows Security Checks & Persistence Enumeration Script
 # Combines security configuration auditing with persistence mechanism enumeration
 
+# Check for Constrained Language Mode
+if ($ExecutionContext.SessionState.LanguageMode -eq 'ConstrainedLanguage') {
+    Write-Host "ERROR: PowerShell is running in Constrained Language Mode." -ForegroundColor Red
+    Write-Host "This script requires Full Language Mode to run." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Constrained Language Mode is typically enforced by:" -ForegroundColor Yellow
+    Write-Host "  - AppLocker policies" -ForegroundColor Yellow
+    Write-Host "  - Windows Defender Application Control (WDAC)" -ForegroundColor Yellow
+    Write-Host "  - Device Guard" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Current Language Mode: $($ExecutionContext.SessionState.LanguageMode)" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "To check AppLocker status: Get-AppLockerPolicy -Effective -Xml" -ForegroundColor Gray
+    Write-Host "To bypass (if allowed): powershell -version 2 -ep bypass .\SeChecks.ps1" -ForegroundColor Gray
+    Write-Host ""
+    Read-Host "Press Enter to exit..."
+    exit 1
+}
+
 # Admin check - allows non-admin execution with warnings
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
