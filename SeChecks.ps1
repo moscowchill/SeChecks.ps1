@@ -1217,14 +1217,30 @@ Write-Host ""
 
 # AppInit_DLLs
 Write-Host "[+] AppInit_DLLs..." -ForegroundColor Yellow
-Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows" -Name AppInit_DLLs -ErrorAction SilentlyContinue | Select-Object AppInit_DLLs
-Get-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Windows" -Name AppInit_DLLs -ErrorAction SilentlyContinue | Select-Object AppInit_DLLs
+$appInit64 = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows" -Name AppInit_DLLs -ErrorAction SilentlyContinue
+$appInit32 = Get-ItemProperty -Path "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows NT\CurrentVersion\Windows" -Name AppInit_DLLs -ErrorAction SilentlyContinue
+if ($appInit64 -and $appInit64.AppInit_DLLs) {
+    Write-Host "  x64: $($appInit64.AppInit_DLLs)" -ForegroundColor $(if ($appInit64.AppInit_DLLs -eq '') { 'Green' } else { 'Red' })
+} else {
+    Write-Host "  x64: (empty)" -ForegroundColor Green
+}
+if ($appInit32 -and $appInit32.AppInit_DLLs) {
+    Write-Host "  x86: $($appInit32.AppInit_DLLs)" -ForegroundColor $(if ($appInit32.AppInit_DLLs -eq '') { 'Green' } else { 'Red' })
+} else {
+    Write-Host "  x86: (empty)" -ForegroundColor Green
+}
 Write-Host ""
 
 # LSA Packages
 Write-Host "[+] LSA Authentication Packages..." -ForegroundColor Yellow
-Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "Authentication Packages" -ErrorAction SilentlyContinue | Select-Object "Authentication Packages"
-Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "Security Packages" -ErrorAction SilentlyContinue | Select-Object "Security Packages"
+$authPkgs = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "Authentication Packages" -ErrorAction SilentlyContinue
+$secPkgs = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -Name "Security Packages" -ErrorAction SilentlyContinue
+if ($authPkgs) {
+    Write-Host "  Authentication Packages: $($authPkgs.'Authentication Packages' -join ', ')" -ForegroundColor White
+}
+if ($secPkgs) {
+    Write-Host "  Security Packages: $($secPkgs.'Security Packages' -join ', ')" -ForegroundColor White
+}
 Write-Host ""
 
 # Credential Manager entries
